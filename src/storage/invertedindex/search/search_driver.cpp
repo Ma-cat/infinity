@@ -30,6 +30,7 @@ import logger;
 import third_party;
 import analyzer;
 import analyzer_pool;
+import common_analyzer;
 
 namespace infinity {
 
@@ -153,9 +154,11 @@ std::unique_ptr<QueryNode> SearchDriver::AnalyzeAndBuildQueryNode(const std::str
         RecoverableError(Status::UnexpectedError(String("Failed to get or initialize analyzer: ") + analyzer_name));
     }
     if (analyzer_name == AnalyzerPool::STANDARD) {
-        TermList temp_output_terms;
-        analyzer->Analyze(input_term, temp_output_terms);
+        (dynamic_cast<CommonLanguageAnalyzer*>(analyzer.get()))->SetExtractEngStem(false);
+        // TermList temp_output_terms;
+        analyzer->Analyze(input_term, terms);
         // remove duplicates and only keep the root words for query
+        /*
         const u32 INVALID_TERM_OFFSET = -1;
         Term last_term;
         last_term.word_offset_ = INVALID_TERM_OFFSET;
@@ -180,6 +183,7 @@ std::unique_ptr<QueryNode> SearchDriver::AnalyzeAndBuildQueryNode(const std::str
         if (last_term.word_offset_ != INVALID_TERM_OFFSET) {
             terms.emplace_back(last_term);
         }
+        */
     } else {
         analyzer->Analyze(input_term, terms);
     }
