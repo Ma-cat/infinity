@@ -27,7 +27,7 @@ module;
 #include <cstdlib>
 #include <cstring>
 #include <exception>
-#include <experimental/source_location>
+#include <source_location>
 #include <filesystem>
 #include <forward_list>
 #include <functional>
@@ -55,8 +55,9 @@ export module stl;
 
 export namespace std {
 
-    using std::experimental::source_location;
-// using std::stringstream;
+    using std::source_location;
+
+    // using std::stringstream;
     using std::forward;
     using std::move;
     using std::exchange;
@@ -92,7 +93,6 @@ export namespace std {
     using std::upper_bound;
 
     using std::condition_variable;
-    using std::condition_variable_any;
     using std::lock_guard;
     using std::memory_order;
     using std::memory_order_acq_rel;
@@ -200,6 +200,10 @@ export namespace std {
     using std::filesystem::remove_all;
     }
 
+    namespace this_thread {
+        using std::this_thread::sleep_for;
+    }
+
     using std::iota;
     using std::mt19937;
     using std::random_device;
@@ -234,6 +238,17 @@ export namespace std {
 
     using std::begin;
     using std::end;
+
+    using std::time_t;
+    using std::asctime;
+    using std::localtime;
+
+    using std::stof;
+    using std::stod;
+
+    using std::construct_at;
+
+    using std::set;
 } // namespace std
 
 namespace infinity {
@@ -385,11 +400,6 @@ namespace infinity {
     using ThreadPool = ctpl::thread_pool;
 
     using Thread = std::thread;
-
-    // template< class Rep, class Period >
-    // void SleepFor(const std::chrono::duration<Rep, Period>& sleep_duration) {
-    //     std::this_thread::sleep_for(sleep_duration);
-    // }
 
     using atomic_u32 = std::atomic_uint32_t;
     using atomic_u64 = std::atomic_uint64_t;

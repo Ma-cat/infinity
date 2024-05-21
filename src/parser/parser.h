@@ -74,6 +74,7 @@ extern int sqldebug;
 #include "statement/show_statement.h"
 #include "statement/update_statement.h"
 #include "statement/command_statement.h"
+#include "statement/compact_statement.h"
 #include "table_reference/base_table_reference.h"
 #include "table_reference/join_reference.h"
 #include "table_reference/cross_product_reference.h"
@@ -115,7 +116,7 @@ struct SQL_LTYPE {
         }                                         \
     }
 
-#line 119 "parser.h"
+#line 120 "parser.h"
 
 /* Token kinds.  */
 #ifndef SQLTOKENTYPE
@@ -241,57 +242,59 @@ struct SQL_LTYPE {
     EMBEDDING = 370,               /* EMBEDDING  */
     VECTOR = 371,                  /* VECTOR  */
     BIT = 372,                     /* BIT  */
-    PRIMARY = 373,                 /* PRIMARY  */
-    KEY = 374,                     /* KEY  */
-    UNIQUE = 375,                  /* UNIQUE  */
-    NULLABLE = 376,                /* NULLABLE  */
-    IS = 377,                      /* IS  */
-    DEFAULT = 378,                 /* DEFAULT  */
-    TRUE = 379,                    /* TRUE  */
-    FALSE = 380,                   /* FALSE  */
-    INTERVAL = 381,                /* INTERVAL  */
-    SECOND = 382,                  /* SECOND  */
-    SECONDS = 383,                 /* SECONDS  */
-    MINUTE = 384,                  /* MINUTE  */
-    MINUTES = 385,                 /* MINUTES  */
-    HOUR = 386,                    /* HOUR  */
-    HOURS = 387,                   /* HOURS  */
-    DAY = 388,                     /* DAY  */
-    DAYS = 389,                    /* DAYS  */
-    MONTH = 390,                   /* MONTH  */
-    MONTHS = 391,                  /* MONTHS  */
-    YEAR = 392,                    /* YEAR  */
-    YEARS = 393,                   /* YEARS  */
-    EQUAL = 394,                   /* EQUAL  */
-    NOT_EQ = 395,                  /* NOT_EQ  */
-    LESS_EQ = 396,                 /* LESS_EQ  */
-    GREATER_EQ = 397,              /* GREATER_EQ  */
-    BETWEEN = 398,                 /* BETWEEN  */
-    AND = 399,                     /* AND  */
-    OR = 400,                      /* OR  */
-    EXTRACT = 401,                 /* EXTRACT  */
-    LIKE = 402,                    /* LIKE  */
-    DATA = 403,                    /* DATA  */
-    LOG = 404,                     /* LOG  */
-    BUFFER = 405,                  /* BUFFER  */
-    KNN = 406,                     /* KNN  */
-    USING = 407,                   /* USING  */
-    SESSION = 408,                 /* SESSION  */
-    GLOBAL = 409,                  /* GLOBAL  */
-    OFF = 410,                     /* OFF  */
-    EXPORT = 411,                  /* EXPORT  */
-    PROFILE = 412,                 /* PROFILE  */
-    CONFIGS = 413,                 /* CONFIGS  */
-    CONFIG = 414,                  /* CONFIG  */
-    PROFILES = 415,                /* PROFILES  */
-    STATUS = 416,                  /* STATUS  */
-    VARIABLES = 417,               /* VARIABLES  */
-    VARIABLE = 418,                /* VARIABLE  */
-    SEARCH = 419,                  /* SEARCH  */
-    MATCH = 420,                   /* MATCH  */
-    QUERY = 421,                   /* QUERY  */
-    FUSION = 422,                  /* FUSION  */
-    NUMBER = 423                   /* NUMBER  */
+    TENSOR = 373,                  /* TENSOR  */
+    TEXT = 374,                    /* TEXT  */
+    PRIMARY = 375,                 /* PRIMARY  */
+    KEY = 376,                     /* KEY  */
+    UNIQUE = 377,                  /* UNIQUE  */
+    NULLABLE = 378,                /* NULLABLE  */
+    IS = 379,                      /* IS  */
+    DEFAULT = 380,                 /* DEFAULT  */
+    TRUE = 381,                    /* TRUE  */
+    FALSE = 382,                   /* FALSE  */
+    INTERVAL = 383,                /* INTERVAL  */
+    SECOND = 384,                  /* SECOND  */
+    SECONDS = 385,                 /* SECONDS  */
+    MINUTE = 386,                  /* MINUTE  */
+    MINUTES = 387,                 /* MINUTES  */
+    HOUR = 388,                    /* HOUR  */
+    HOURS = 389,                   /* HOURS  */
+    DAY = 390,                     /* DAY  */
+    DAYS = 391,                    /* DAYS  */
+    MONTH = 392,                   /* MONTH  */
+    MONTHS = 393,                  /* MONTHS  */
+    YEAR = 394,                    /* YEAR  */
+    YEARS = 395,                   /* YEARS  */
+    EQUAL = 396,                   /* EQUAL  */
+    NOT_EQ = 397,                  /* NOT_EQ  */
+    LESS_EQ = 398,                 /* LESS_EQ  */
+    GREATER_EQ = 399,              /* GREATER_EQ  */
+    BETWEEN = 400,                 /* BETWEEN  */
+    AND = 401,                     /* AND  */
+    OR = 402,                      /* OR  */
+    EXTRACT = 403,                 /* EXTRACT  */
+    LIKE = 404,                    /* LIKE  */
+    DATA = 405,                    /* DATA  */
+    LOG = 406,                     /* LOG  */
+    BUFFER = 407,                  /* BUFFER  */
+    KNN = 408,                     /* KNN  */
+    USING = 409,                   /* USING  */
+    SESSION = 410,                 /* SESSION  */
+    GLOBAL = 411,                  /* GLOBAL  */
+    OFF = 412,                     /* OFF  */
+    EXPORT = 413,                  /* EXPORT  */
+    PROFILE = 414,                 /* PROFILE  */
+    CONFIGS = 415,                 /* CONFIGS  */
+    CONFIG = 416,                  /* CONFIG  */
+    PROFILES = 417,                /* PROFILES  */
+    VARIABLES = 418,               /* VARIABLES  */
+    VARIABLE = 419,                /* VARIABLE  */
+    SEARCH = 420,                  /* SEARCH  */
+    MATCH = 421,                   /* MATCH  */
+    MAXSIM = 422,                  /* MAXSIM  */
+    QUERY = 423,                   /* QUERY  */
+    FUSION = 424,                  /* FUSION  */
+    NUMBER = 425                   /* NUMBER  */
   };
   typedef enum sqltokentype sqltoken_kind_t;
 #endif
@@ -300,7 +303,7 @@ struct SQL_LTYPE {
 #if ! defined SQLSTYPE && ! defined SQLSTYPE_IS_DECLARED
 union SQLSTYPE
 {
-#line 102 "parser.y"
+#line 103 "parser.y"
 
     bool    bool_value;
     char*   str_value;
@@ -323,6 +326,7 @@ union SQLSTYPE
     infinity::FlushStatement*  flush_stmt;
     infinity::OptimizeStatement*  optimize_stmt;
     infinity::CommandStatement* command_stmt;
+    infinity::CompactStatement* compact_stmt;
 
     std::vector<infinity::BaseStatement*>* stmt_array;
 
@@ -331,7 +335,7 @@ union SQLSTYPE
     infinity::ColumnDef*              table_column_t;
     infinity::ColumnType              column_type_t;
     infinity::ConstraintType          column_constraint_t;
-    std::unordered_set<infinity::ConstraintType>* column_constraints_t;
+    std::set<infinity::ConstraintType>* column_constraints_t;
     std::vector<std::string>*         identifier_array_t;
     infinity::TableConstraint*        table_constraint_t;
 
@@ -373,7 +377,7 @@ union SQLSTYPE
     // infinity::IfExistsInfo*        if_exists_info_t;
     infinity::IfNotExistsInfo*     if_not_exists_info_t;
 
-#line 377 "parser.h"
+#line 381 "parser.h"
 
 };
 typedef union SQLSTYPE SQLSTYPE;

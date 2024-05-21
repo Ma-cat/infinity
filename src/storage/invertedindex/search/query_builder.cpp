@@ -37,12 +37,11 @@ import third_party;
 
 namespace infinity {
 
-QueryBuilder::QueryBuilder(TransactionID txn_id, TxnTimeStamp begin_ts, SharedPtr<BaseTableRef> &base_table_ref)
-    : txn_id_(txn_id), begin_ts_(begin_ts), table_entry_(base_table_ref->table_entry_ptr_),
-      index_reader_(table_entry_->GetFullTextIndexReader(txn_id_, begin_ts_)) {
+QueryBuilder::QueryBuilder(Txn *txn, SharedPtr<BaseTableRef> &base_table_ref)
+    : table_entry_(base_table_ref->table_entry_ptr_), index_reader_(table_entry_->GetFullTextIndexReader(txn)) {
     u64 total_row_count = 0;
-    for (SegmentEntry *segment_entry : base_table_ref->block_index_->segments_) {
-        total_row_count += segment_entry->row_count();
+    for (const auto &[segment_id, segment_info] : base_table_ref->block_index_->segment_block_index_) {
+        total_row_count += segment_info.segment_offset_;
     }
 
     scorer_.Init(total_row_count, &index_reader_);
@@ -66,7 +65,7 @@ UniquePtr<DocIterator> QueryBuilder::CreateSearch(FullTextQueryContext &context)
         } else {
             oss << "Empty tree!\n";
         }
-        LOG_TRACE(std::move(oss).str());
+        LOG_DEBUG(std::move(oss).str());
     }
 #endif
     return result;
@@ -88,7 +87,7 @@ UniquePtr<EarlyTerminateIterator> QueryBuilder::CreateEarlyTerminateSearch(FullT
         } else {
             oss << "Empty tree!\n";
         }
-        LOG_TRACE(std::move(oss).str());
+        LOG_DEBUG(std::move(oss).str());
     }
 #endif
     return result;

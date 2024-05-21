@@ -175,9 +175,15 @@ Value Value::MakeRow(RowID input) {
     return value;
 }
 
-Value Value::MakeVarchar(const String &str) {
+//Value Value::MakeVarchar(const String &str) {
+//    Value value(LogicalType::kVarchar);
+//    value.value_info_ = MakeShared<StringValueInfo>(str);
+//    return value;
+//}
+
+Value Value::MakeVarchar(const std::string_view str_view) {
     Value value(LogicalType::kVarchar);
-    value.value_info_ = MakeShared<StringValueInfo>(str);
+    value.value_info_ = MakeShared<StringValueInfo>(str_view);
     return value;
 }
 
@@ -192,9 +198,6 @@ Value Value::MakeVarchar(const VarcharT &input) {
     Value value(LogicalType::kVarchar);
     if (input.IsInlined()) {
         String tmp_str(input.short_.data_, input.length_);
-        value.value_info_ = MakeShared<StringValueInfo>(std::move(tmp_str));
-    } else if (input.IsValue()) {
-        String tmp_str(input.value_.ptr_, input.length_);
         value.value_info_ = MakeShared<StringValueInfo>(std::move(tmp_str));
     } else {
         UnrecoverableError("Value::MakeVarchar(VectorVarchar) is unsupported!");
@@ -213,6 +216,30 @@ Value Value::MakeEmbedding(ptr_t ptr, SharedPtr<TypeInfo> type_info_ptr) {
     std::memcpy(embedding_value_info->data_.data(), ptr, len);
     Value value(LogicalType::kEmbedding, type_info_ptr);
     value.value_info_ = embedding_value_info;
+    return value;
+}
+
+Value Value::MakeTensor(const_ptr_t ptr, SizeT bytes, SharedPtr<TypeInfo> type_info_ptr) {
+    if (type_info_ptr->type() != TypeInfoType::kEmbedding) {
+        UnrecoverableError(fmt::format("Value::MakeTensor(type_info_ptr={}) is not unsupported!", type_info_ptr->ToString()));
+    }
+    const EmbeddingInfo *embedding_info = static_cast<EmbeddingInfo *>(type_info_ptr.get());
+    if (const SizeT len = embedding_info->Size(); bytes % len != 0) {
+        Status status = Status::SyntaxError(fmt::format("Value::MakeTensor(bytes={}) is not a multiple of embedding size={}", bytes, len));
+        LOG_ERROR(status.message());
+        RecoverableError(status);
+    }
+    if (bytes > DEFAULT_FIXLEN_TENSOR_CHUNK_SIZE) {
+        Status status = Status::SyntaxError(
+            fmt::format("Value::MakeTensor(bytes={}) is larger than the maximum tensor size={}", bytes, DEFAULT_FIXLEN_TENSOR_CHUNK_SIZE));
+        LOG_ERROR(status.message());
+        RecoverableError(status);
+    }
+    SharedPtr<EmbeddingValueInfo> embedding_value_info = MakeShared<EmbeddingValueInfo>();
+    embedding_value_info->data_.resize(bytes);
+    std::memcpy(embedding_value_info->data_.data(), ptr, bytes);
+    Value value(LogicalType::kTensor, std::move(type_info_ptr));
+    value.value_info_ = std::move(embedding_value_info);
     return value;
 }
 
@@ -852,6 +879,5 @@ String EmbeddingValueInfo::GetString(EmbeddingInfo* embedding_info) {
     }
     return res;
 }
-
 
 } // namespace infinity

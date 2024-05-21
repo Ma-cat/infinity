@@ -130,7 +130,8 @@ void MemoryIndexer::Insert(SharedPtr<ColumnVector> column_vector, u32 row_offset
 
     auto task = MakeShared<BatchInvertTask>(seq_inserted, column_vector, row_offset, row_count, doc_count);
     if (offline) {
-        auto inverter = MakeShared<ColumnInverter>(this->analyzer_, nullptr, column_lengths_);
+        auto inverter = MakeShared<ColumnInverter>(nullptr, column_lengths_);
+        inverter->InitAnalyzer(this->analyzer_);
         auto func = [this, task, inverter](int id) {
             SizeT column_length_sum = inverter->InvertColumn(task->column_vector_, task->row_offset_, task->row_count_, task->start_doc_id_);
             column_length_sum_ += column_length_sum;
@@ -142,7 +143,8 @@ void MemoryIndexer::Insert(SharedPtr<ColumnVector> column_vector, u32 row_offset
         inverting_thread_pool_.push(std::move(func));
     } else {
         PostingWriterProvider provider = [this](const String &term) -> SharedPtr<PostingWriter> { return GetOrAddPosting(term); };
-        auto inverter = MakeShared<ColumnInverter>(this->analyzer_, provider, column_lengths_);
+        auto inverter = MakeShared<ColumnInverter>(provider, column_lengths_);
+        inverter->InitAnalyzer(this->analyzer_);
         auto func = [this, task, inverter](int id) {
             // LOG_INFO(fmt::format("online inverter {} begin", id));
             SizeT column_length_sum = inverter->InvertColumn(task->column_vector_, task->row_offset_, task->row_count_, task->start_doc_id_);
@@ -176,8 +178,6 @@ void MemoryIndexer::Commit(bool offline) {
 }
 
 SizeT MemoryIndexer::CommitOffline(SizeT wait_if_empty_ms) {
-    // BaseProfiler profiler;
-    // profiler.Begin();
     std::unique_lock<std::mutex> lock(mutex_commit_, std::defer_lock);
     if (!lock.try_lock()) {
         return 0;
@@ -191,10 +191,8 @@ SizeT MemoryIndexer::CommitOffline(SizeT wait_if_empty_ms) {
     SizeT num = inverters.size();
     if (num > 0) {
         for (auto &inverter : inverters) {
-            // inverter->SpillSortResults(this->spill_file_handle_, this->tuple_count_);
 #ifdef USE_BUF
             inverter->SpillSortResults(this->spill_file_handle_, this->tuple_count_, spill_buffer_, spill_buffer_size_);
-            // inverter->SpillSortResults(this->spill_file_handle_, this->tuple_count_, buf_writer_);
 #else
             inverter->SpillSortResults(this->spill_file_handle_, this->tuple_count_);
 #endif
@@ -208,8 +206,6 @@ SizeT MemoryIndexer::CommitOffline(SizeT wait_if_empty_ms) {
             cv_.notify_all();
         }
     }
-    // LOG_INFO(fmt::format("MemoryIndexer::CommitOffline time cost: {}", profiler.ElapsedToString()));
-    // profiler.End();
     return num;
 }
 
@@ -258,7 +254,7 @@ SizeT MemoryIndexer::CommitSync(SizeT wait_if_empty_ms) {
 
     return num_generated;
 }
-#define PRINT_TIME_COST
+//#define PRINT_TIME_COST
 void MemoryIndexer::Dump(bool offline, bool spill) {
     if (offline) {
         assert(!spill);

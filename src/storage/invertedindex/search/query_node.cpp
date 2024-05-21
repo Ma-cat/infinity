@@ -45,7 +45,9 @@ std::unique_ptr<QueryNode> QueryNode::GetOptimizedQueryTree(std::unique_ptr<Quer
 #endif
     std::unique_ptr<QueryNode> optimized_root;
     if (!root) {
-        RecoverableError(Status::SyntaxError("Invalid query statement: Empty query tree"));
+        Status status = Status::SyntaxError("Invalid query statement: Empty query tree");
+        LOG_ERROR(status.message());
+        RecoverableError(status);
     }
     // push down the weight to the leaf term node
     root->PushDownWeight();
@@ -62,14 +64,18 @@ std::unique_ptr<QueryNode> QueryNode::GetOptimizedQueryTree(std::unique_ptr<Quer
             break;
         }
         case QueryNodeType::NOT: {
-            RecoverableError(Status::SyntaxError("Invalid query statement: NotQueryNode should not be on the top level"));
+            Status status = Status::SyntaxError("Invalid query statement: NotQueryNode should not be on the top level");
+            LOG_ERROR(status.message());
+            RecoverableError(status);
             break;
         }
         case QueryNodeType::AND:
         case QueryNodeType::OR: {
             optimized_root = static_cast<MultiQueryNode *>(root.get())->GetNewOptimizedQueryTree();
             if (optimized_root->GetType() == QueryNodeType::NOT) {
-                RecoverableError(Status::SyntaxError("Invalid query statement: NotQueryNode should not be on the top level"));
+                Status status = Status::SyntaxError("Invalid query statement: NotQueryNode should not be on the top level");
+                LOG_ERROR(status.message());
+                RecoverableError(status);
             }
             break;
         }
@@ -94,7 +100,7 @@ std::unique_ptr<QueryNode> QueryNode::GetOptimizedQueryTree(std::unique_ptr<Quer
         } else {
             oss << "Empty query tree!\n";
         }
-        LOG_TRACE(std::move(oss).str());
+        LOG_DEBUG(std::move(oss).str());
     }
 #endif
     return optimized_root;
@@ -153,7 +159,9 @@ std::unique_ptr<QueryNode> NotQueryNode::InnerGetNewOptimizedQueryTree() {
     for (auto &child : children_) {
         switch (child->GetType()) {
             case QueryNodeType::NOT: {
-                RecoverableError(Status::SyntaxError("Invalid query statement: NotQueryNode should not have not child"));
+                Status status = Status::SyntaxError("Invalid query statement: NotQueryNode should not have not child");
+                LOG_ERROR(status.message());
+                RecoverableError(status);
                 break;
             }
             case QueryNodeType::TERM:
@@ -345,7 +353,9 @@ std::unique_ptr<QueryNode> OrQueryNode::InnerGetNewOptimizedQueryTree() {
         or_node->children_ = std::move(or_list);
         return or_node;
     } else {
-        RecoverableError(Status::SyntaxError("Invalid query statement: OrQueryNode should not have both not child and non-not child"));
+        Status status = Status::SyntaxError("Invalid query statement: OrQueryNode should not have both not child and non-not child");
+        LOG_ERROR(status.message());
+        RecoverableError(status);
         return nullptr;
     }
 }
@@ -359,7 +369,6 @@ std::unique_ptr<QueryNode> AndNotQueryNode::InnerGetNewOptimizedQueryTree() {
 }
 
 // create search iterator
-
 std::unique_ptr<DocIterator> TermQueryNode::CreateSearch(const TableEntry *table_entry, IndexReader &index_reader, Scorer *scorer) const {
     ColumnID column_id = table_entry->GetColumnIdByName(column_);
     ColumnIndexReader *column_index_reader = index_reader.GetColumnIndexReader(column_id);
@@ -430,7 +439,7 @@ std::unique_ptr<DocIterator> PhraseQueryNode::CreateSearch(const TableEntry *tab
         }
         posting_iterators.emplace_back(std::move(posting_iterator));
     }
-    auto search = MakeUnique<PhraseDocIterator>(std::move(posting_iterators), column_id, GetWeight());
+    auto search = MakeUnique<PhraseDocIterator>(std::move(posting_iterators), GetWeight());
 
     search->terms_ptr_ = &terms_;
     search->column_name_ptr_ = &column_;
@@ -454,16 +463,16 @@ PhraseQueryNode::CreateEarlyTerminateSearch(const TableEntry *table_entry, Index
         fetch_position = true;
     }
 
-    Vector<std::unique_ptr<BlockMaxTermDocIterator>> term_doc_iterators;
-    for (auto &term : terms_) {
-        auto term_doc_iterator = column_index_reader->LookupBlockMax(term, index_reader.session_pool_.get(), GetWeight(), fetch_position);
-        if (nullptr == term_doc_iterator) {
+    Vector<std::unique_ptr<PostingIterator>> posting_iterators;
+    for (auto& term : terms_) {
+        auto posting_iterator = column_index_reader->Lookup(term, index_reader.session_pool_.get(), fetch_position);
+        if (nullptr == posting_iterator) {
+            fmt::print("not found term = {}\n", term);
             return nullptr;
         }
-        term_doc_iterators.emplace_back(std::move(term_doc_iterator));
+        posting_iterators.emplace_back(std::move(posting_iterator));
     }
-
-    auto search = MakeUnique<BlockMaxPhraseDocIterator>(std::move(term_doc_iterators), column_id);
+    auto search = MakeUnique<BlockMaxPhraseDocIterator>(std::move(posting_iterators), GetWeight());
     if (!search) {
         return nullptr;
     }

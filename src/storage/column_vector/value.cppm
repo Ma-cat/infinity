@@ -68,6 +68,7 @@ struct StringValueInfo : public ExtraValueInfo {
 
 public:
     explicit StringValueInfo(const String &str_p) : ExtraValueInfo(ExtraValueInfoType::STRING_VALUE_INFO), str_(str_p) {}
+    explicit StringValueInfo(const std::string_view &str_view) : ExtraValueInfo(ExtraValueInfoType::STRING_VALUE_INFO), str_(str_view) {}
     explicit StringValueInfo(String &&str_p) : ExtraValueInfo(ExtraValueInfoType::STRING_VALUE_INFO), str_(std::move(str_p)) {}
 
     const String &GetString() { return str_; }
@@ -93,6 +94,18 @@ public:
         SizeT len = values_p.size() * sizeof(T);
         data_.resize(len);
         std::memcpy(data_.data(), values_p.data(), len);
+    }
+
+    template <>
+    explicit EmbeddingValueInfo(const Vector<bool> &values_p) : ExtraValueInfo(ExtraValueInfoType::EMBEDDING_VALUE_INFO) {
+        SizeT len = values_p.size() / 8;
+        data_.resize(len);
+        auto *data_ptr = reinterpret_cast<u8 *>(data_.data());
+        for (SizeT i = 0; i < values_p.size(); i++) {
+            if (values_p[i]) {
+                data_ptr[i / 8] |= (static_cast<u8>(1) << (i % 8));
+            }
+        }
     }
 
     String GetString(EmbeddingInfo* embedding_info);
@@ -163,7 +176,9 @@ public:
 
     static Value MakeRow(RowID input);
 
-    static Value MakeVarchar(const String &str);
+    // static Value MakeVarchar(const String &str);
+
+    static Value MakeVarchar(const std::string_view str_view);
 
     static Value MakeVarchar(const char *ptr, SizeT len);
 
@@ -196,6 +211,8 @@ public:
     }
 
     static Value MakeEmbedding(ptr_t ptr, SharedPtr<TypeInfo> type_info_ptr);
+
+    static Value MakeTensor(const_ptr_t ptr, SizeT bytes, SharedPtr<TypeInfo> type_info_ptr);
 
     // Object member
 public:

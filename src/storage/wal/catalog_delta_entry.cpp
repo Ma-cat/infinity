@@ -327,7 +327,7 @@ UniquePtr<AddTableEntryOp> AddTableEntryOp::ReadAdv(char *&ptr, char *ptr_end) {
         SharedPtr<DataType> column_type = DataType::ReadAdv(ptr, max_bytes);
         String column_name = ReadBufAdv<String>(ptr);
         i32 constraints_size = ReadBufAdv<i32>(ptr);
-        HashSet<ConstraintType> constraints;
+        std::set<ConstraintType> constraints;
         for (i32 j = 0; j < constraints_size; j++) {
             ConstraintType ct = ReadBufAdv<ConstraintType>(ptr);
             constraints.insert(ct);
@@ -998,15 +998,17 @@ void GlobalCatalogDeltaEntry::AddDeltaEntry(UniquePtr<CatalogDeltaEntry> delta_e
     //     }
     // }
     std::lock_guard<std::mutex> lock(catalog_delta_locker_);
-    if (delta_entry->sequence() != last_sequence_ + 1) {
+    u64 entry_sequence = delta_entry->sequence();
+    if (entry_sequence != last_sequence_ + 1) {
         // Discontinuous
-        u64 entry_sequence = delta_entry->sequence();
+        // LOG_INFO(fmt::format("Add delta entry: {} in to sequence_heap_", entry_sequence));
         sequence_heap_.push(entry_sequence);
         delta_entry_map_.emplace(entry_sequence, std::move(delta_entry));
     } else {
         // Continuous
         do {
             wal_size_ = std::max(wal_size_, wal_size);
+            // LOG_INFO(fmt::format("Add delta entry: {} in to delta_ops_", entry_sequence));
             this->AddDeltaEntryInner(delta_entry.get());
 
             ++last_sequence_;

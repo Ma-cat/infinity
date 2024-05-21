@@ -17,6 +17,7 @@ module;
 #include <filesystem>
 #include <queue>
 #include <cstring>
+#include <cassert>
 
 export module external_sort_merger;
 
@@ -225,14 +226,8 @@ public:
     }
 
     void Put(const char* data, SizeT length) {
-        if (length > buffer_size_) {
-            throw std::runtime_error("Data length exceeds buffer capacity");
-        }
-        if (IsFull()) {
-            throw std::runtime_error("Buffer is full");
-        }
-
-        // Copy data into the current buffer
+        assert(length <= buffer_size_);
+        assert(!IsFull());
         std::memcpy(buffer_array_[head_].get(), data, length);
         head_ = (head_ + 1) % total_buffers_;
 
@@ -251,33 +246,17 @@ public:
             full_ = true;
         }
     }
-
+    // use with PutReal, PutReal will modify head_ pointer
     char* PutByRead(DirectIO &io_stream, u32& length) {
-        if (length > buffer_size_) {
-            throw std::runtime_error("Data length exceeds buffer capacity");
-        }
-        if (IsFull()) {
-            throw std::runtime_error("Buffer is full");
-        }
-
-        // Read data into the current buffer
+        assert(length <= buffer_size_);
+        assert(!IsFull());
+        // only read data into the current buffer
         length = io_stream.Read(buffer_array_[head_].get(), length);
         return buffer_array_[head_].get();
-//        auto res_ptr = buffer_array_[head_].get();
-//        head_ = (head_ + 1) % total_buffers_;
-//
-//        if (head_ == tail_) {
-//            full_ = true;
-//        }
-//        return res_ptr;
     }
 
     Tuple<const char*, u32, u32> Get() {
-        // std::cout << "CycleBuffer::Get" << std::endl;
-        if (IsEmpty()) {
-            throw std::runtime_error("Buffer is empty");
-        }
-
+        assert(!IsEmpty());
         const char* result_data = buffer_array_[tail_].get();
         auto result_real_size = buffer_real_size_[tail_];
         auto result_real_num = buffer_real_num_[tail_];
@@ -394,13 +373,9 @@ class SortMerger {
 
     void Predict(DirectIO &io_stream);
 
-    void PredictByQueue(DirectIO &io_stream);
-
     void Merge();
 
     void MergeMmap(MmapReader &io_stream, SharedPtr<FileWriter> out_file_writer);
-
-    void MergeByQueue();
 
     void Output(FILE *f, u32 idx);
 
