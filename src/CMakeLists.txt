@@ -287,6 +287,52 @@ target_include_directories(infinity PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_include_directories(infinity PUBLIC "${CMAKE_SOURCE_DIR}/third_party/thrift/lib/cpp/src")
 target_include_directories(infinity PUBLIC "${CMAKE_BINARY_DIR}/third_party/thrift/")
 
+add_library(embedded_infinity MODULE
+        embedded_infinity.cpp
+)
+
+target_sources(embedded_infinity
+        PRIVATE
+        FILE_SET core_cxx_modules TYPE CXX_MODULES FILES
+)
+
+nanobind_compile_options(embedded_infinity)
+nanobind_link_options(embedded_infinity)
+
+set_target_properties(embedded_infinity PROPERTIES LINKER_LANGUAGE CXX)
+
+set(libname "infinity_embedded")
+
+nanobind_build_library(${libname})
+
+nanobind_extension(embedded_infinity)
+
+add_dependencies(embedded_infinity oatpp)
+
+target_link_libraries(embedded_infinity PRIVATE
+        ${libname}
+        infinity_core
+        sql_parser
+        onnxruntime_mlas
+        zsv_parser
+        roaring
+        newpfor
+        fastpfor
+        lz4.a
+        atomic.a
+        event.a
+        oatpp.a
+        jma
+)
+
+target_link_directories(embedded_infinity PUBLIC "${CMAKE_BINARY_DIR}/lib")
+target_link_directories(embedded_infinity PUBLIC "${CMAKE_BINARY_DIR}/third_party/oatpp/src/")
+
+nanobind_set_visibility(embedded_infinity)
+
+#nanobind_add_module(embed_infinity src/embed_infinity.cpp)
+install(TARGETS embedded_infinity LIBRARY DESTINATION infinity)
+
 ### unit test
 
 file(GLOB_RECURSE
