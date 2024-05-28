@@ -148,7 +148,7 @@ find_package(Python 3.8
         OPTIONAL_COMPONENTS Development.SABIModule)
 message("after find python, Python3_INCLUDE_DIRS = ${Python3_INCLUDE_DIRS}")
 message("after find python, Python3_LIBRARIES = ${Python3_LIBRARIES}")
-set(PYTHON_EXECUTABLE /home/infiniflow/miniconda3/bin/python)
+set(PYTHON_EXECUTABLE /home/weilongma/Project/infinity/python-env/infinity-env/bin/python)
 
 if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
