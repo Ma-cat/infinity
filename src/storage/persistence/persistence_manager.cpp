@@ -14,21 +14,18 @@
 
 module;
 
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
-
 module persistence_manager;
 import stl;
+import uuid;
 import third_party;
 import infinity_exception;
 
 namespace fs = std::filesystem;
-constexpr std::size_t BUFFER_SIZE = 1024 * 1024;           // 1 MB
 
 namespace infinity {
+constexpr SizeT BUFFER_SIZE = 1024 * 1024; // 1 MB
 
-ObjAddr PersistenceManager::Persist(const String &file_path) {
+ObjAddr PersistenceManager::Persist(const String &file_path, bool allow_compose) {
     std::error_code ec;
     fs::path src_fp = file_path;
     SizeT src_size = fs::file_size(src_fp, ec);
@@ -36,7 +33,7 @@ ObjAddr PersistenceManager::Persist(const String &file_path) {
         String error_message = fmt::format("Failed to get file size of {}.", file_path);
         UnrecoverableError(error_message);
     }
-    if (src_size >= object_size_limit_) {
+    if (src_size >= object_size_limit_ || !allow_compose) {
         String obj_key = ObjCreate();
         fs::path dst_fp = workspace_;
         dst_fp.append(obj_key);
@@ -50,15 +47,19 @@ ObjAddr PersistenceManager::Persist(const String &file_path) {
         objects_.emplace(obj_key, ObjStat(src_size, 0));
         return obj_addr;
     } else {
+        std::lock_guard<std::mutex> lock(mtx_);
+        if (int(src_size) > CurrentObjRoomNoLock()) {
+            CurrentObjFinalizeNoLock();
+        }
         ObjAddr obj_addr(current_object_key_, current_object_size_, src_size);
-        CurrentObjAppend(file_path, src_size);
+        CurrentObjAppendNoLock(file_path, src_size);
         return obj_addr;
     }
 }
 
-ObjAddr PersistenceManager::Persist(const char *data, SizeT src_size) {
+ObjAddr PersistenceManager::Persist(const char *data, SizeT src_size, bool allow_compose) {
     fs::path dst_fp = workspace_;
-    if (src_size >= object_size_limit_) {
+    if (src_size >= object_size_limit_ || !allow_compose) {
         String obj_key = ObjCreate();
         dst_fp.append(obj_key);
         std::ofstream outFile(dst_fp, std::ios::app);
@@ -74,8 +75,11 @@ ObjAddr PersistenceManager::Persist(const char *data, SizeT src_size) {
         return obj_addr;
     } else {
         dst_fp.append(current_object_key_);
-        ObjAddr obj_addr(current_object_key_, current_object_size_, src_size);
         std::lock_guard<std::mutex> lock(mtx_);
+        if (int(src_size) > CurrentObjRoomNoLock()) {
+            CurrentObjFinalizeNoLock();
+        }
+        ObjAddr obj_addr(current_object_key_, current_object_size_, src_size);
         std::ofstream outFile(dst_fp, std::ios::app);
         if (!outFile.is_open()) {
             String error_message = fmt::format("Failed to open file {}.", dst_fp.string());
@@ -90,6 +94,22 @@ ObjAddr PersistenceManager::Persist(const char *data, SizeT src_size) {
             current_object_size_ = 0;
         }
         return obj_addr;
+    }
+}
+
+// TODO:
+// - Add a 4-byte pad CRC32 checksum of the whole object to detect Silent Data Corruption.
+// - Upload the finalized object to object store in background.
+void PersistenceManager::CurrentObjFinalize() {
+    std::lock_guard<std::mutex> lock(mtx_);
+    CurrentObjFinalizeNoLock();
+}
+
+void PersistenceManager::CurrentObjFinalizeNoLock() {
+    if (current_object_size_ > 0) {
+        objects_.emplace(current_object_key_, ObjStat(current_object_size_, 0));
+        current_object_key_ = ObjCreate();
+        current_object_size_ = 0;
     }
 }
 
@@ -114,15 +134,11 @@ void PersistenceManager::PutObjCache(const ObjAddr &object_addr) {
     it->second.ref_count_--;
 }
 
-String PersistenceManager::ObjCreate() {
-    boost::uuids::uuid uuid = boost::uuids::random_generator()();
-    return boost::uuids::to_string(uuid);
-}
+String PersistenceManager::ObjCreate() { return UUID().to_string(); }
 
-int PersistenceManager::CurrentObjRoom() { return int(object_size_limit_) - int(current_object_size_); }
+int PersistenceManager::CurrentObjRoomNoLock() { return int(object_size_limit_) - int(current_object_size_); }
 
-void PersistenceManager::CurrentObjAppend(const String &file_path, SizeT file_size) {
-    std::lock_guard<std::mutex> lock(mtx_);
+void PersistenceManager::CurrentObjAppendNoLock(const String &file_path, SizeT file_size) {
     fs::path src_fp = file_path;
     fs::path dst_fp = workspace_;
     dst_fp.append(current_object_key_);
